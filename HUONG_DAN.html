@@ -1,0 +1,359 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Hướng dẫn STM32F103 và Keil C</title><style>
+body{font:16px/1.65 system-ui,Arial,sans-serif;color:#172534;background:#edf2f6;margin:0}main{max-width:1000px;margin:32px auto;padding:32px 44px;background:white;border-radius:12px}h1{font-size:30px;line-height:1.25}h2{margin-top:42px;color:#075c72;border-bottom:1px solid #cee2e8;padding-bottom:8px}h3{margin-top:28px}table{border-collapse:collapse;width:100%;font-size:14px;margin:20px 0}td,th{border:1px solid #d5e0e5;padding:9px;text-align:left;vertical-align:top}th{background:#e5f2f5}pre{padding:18px;background:#102a37;color:#eef6f9;border-radius:6px;overflow:auto;font-size:14px;line-height:1.6}code{font-family:Consolas,monospace}p code,li code,td code{background:#eef3f5;padding:2px 4px}a{color:#075c72}strong{font-weight:650}@media(max-width:700px){main{padding:18px;margin:0}table{display:block;overflow:auto}}@media print{body{background:white}main{margin:0;padding:0}pre{white-space:pre-wrap;background:#f1f1f1;color:black}h2,h3{break-after:avoid}tr{break-inside:avoid}}
+</style><main><h1 id="huong-dan-lam-va-nop-bai-bang-keil-c">Hướng dẫn làm và nộp bài bằng Keil C</h1>
+<p>Bộ project này thực hiện toàn bộ đề cương HTN03-N10 trên STM32F103C8T6. Bạn cần tự build bằng Keil, đấu dây, nạp kit và ghi lại kết quả thực nghiệm. Những kết quả đó chưa có trong gói tải về.</p>
+<h2 id="1-phan-cung-va-lua-chon-a-dung">1. Phần cứng và lựa chọn đã dùng</h2>
+<ul>
+<li>STM32F103C8T6, Flash 64 KB, RAM 20 KB; thường là board Blue Pill.</li>
+<li>MQ-135 dạng module có chân AO; dùng ADC thô 0–4095, không tính ppm/AQI.</li>
+<li>OLED <strong>SSD1306 I2C 128×64</strong>, địa chỉ 7 bit mặc định <strong>0x3C</strong>. Module SH1106 hoặc OLED 128×32 cần đổi driver.</li>
+<li>USB-UART mức logic <strong>3,3 V</strong>, 115200 baud, 8N1; không dùng cổng RS-232 ±12 V.</li>
+<li>LED ngoài và buzzer <strong>active</strong> được điều khiển mức cao. Buzzer passive cần PWM, chưa dùng trong thiết kế này.</li>
+<li>ST-Link dùng để nạp/debug; USB-UART dùng để truyền dữ liệu. Hai thiết bị có vai trò khác nhau.</li>
+</ul>
+<h3 id="bang-noi-day">Bảng nối dây</h3>
+<table>
+<thead>
+<tr>
+<th>Thiết bị</th>
+<th>Chân thiết bị</th>
+<th>Nối tới</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MQ-135</td>
+<td>VCC</td>
+<td>Nguồn 5 V đủ dòng theo module</td>
+</tr>
+<tr>
+<td>MQ-135</td>
+<td>GND</td>
+<td>GND chung</td>
+</tr>
+<tr>
+<td>MQ-135</td>
+<td>AO</td>
+<td>Qua R1 10 kΩ tới PA0; R2 15 kΩ từ PA0 xuống GND</td>
+</tr>
+<tr>
+<td>MQ-135</td>
+<td>DO</td>
+<td>Không nối</td>
+</tr>
+<tr>
+<td>OLED</td>
+<td>VCC</td>
+<td>3,3 V với module hỗ trợ điện áp này</td>
+</tr>
+<tr>
+<td>OLED</td>
+<td>GND</td>
+<td>GND chung</td>
+</tr>
+<tr>
+<td>OLED</td>
+<td>SCL</td>
+<td>PB6 / I2C1_SCL</td>
+</tr>
+<tr>
+<td>OLED</td>
+<td>SDA</td>
+<td>PB7 / I2C1_SDA</td>
+</tr>
+<tr>
+<td>USB-UART</td>
+<td>RXD</td>
+<td>PA9 / USART1_TX</td>
+</tr>
+<tr>
+<td>USB-UART</td>
+<td>TXD</td>
+<td>PA10 / USART1_RX</td>
+</tr>
+<tr>
+<td>USB-UART</td>
+<td>GND</td>
+<td>GND chung</td>
+</tr>
+<tr>
+<td>LED ngoài</td>
+<td>Anode qua điện trở 330 Ω</td>
+<td>PB12</td>
+</tr>
+<tr>
+<td>LED ngoài</td>
+<td>Cathode</td>
+<td>GND</td>
+</tr>
+<tr>
+<td>Buzzer active</td>
+<td>Điều khiển transistor</td>
+<td>PB13 qua điện trở base/gate phù hợp</td>
+</tr>
+<tr>
+<td>ST-Link</td>
+<td>SWDIO</td>
+<td>PA13</td>
+</tr>
+<tr>
+<td>ST-Link</td>
+<td>SWCLK</td>
+<td>PA14</td>
+</tr>
+<tr>
+<td>ST-Link</td>
+<td>GND</td>
+<td>GND chung</td>
+</tr>
+<tr>
+<td>ST-Link</td>
+<td>VTref, nếu có</td>
+<td>3,3 V để nhận biết điện áp đích</td>
+</tr>
+</tbody>
+</table>
+<p>Chia áp R1=10 kΩ và R2=15 kΩ cho V(PA0)=0,6×V(AO); AO=5 V thì PA0≈3 V. Đo lại bằng đồng hồ trước khi nối PA0. ADC chỉ nhận trong khoảng GND đến VDDA, khoảng 3,3 V trên board; không nối thẳng AO 5 V vào PA0. Ngưỡng phải hiệu chuẩn lại theo mạch chia áp thực tế.</p>
+<p>SDA/SCL cần pull-up lên <strong>3,3 V</strong>, thường 4,7 kΩ; kiểm tra module đã có chưa. Không dùng pull-up lên 5 V trong cấu hình này. Với buzzer dùng transistor NPN: emitter xuống GND, collector vào cực âm buzzer, cực dương tới nguồn phù hợp, PB13 qua điện trở khoảng 1–4,7 kΩ vào base; thêm diode bảo vệ nếu tải có tính cảm. Không cấp dòng buzzer trực tiếp từ GPIO. Một nguồn phù hợp cho board và cảm biến; không chập các đường cấp nguồn từ USB-UART, ST-Link và nguồn ngoài với nhau.</p>
+<p>Để chạy từ Flash, BOOT0 đặt 0, nhấn Reset sau khi nạp. PC13 là LED lỗi nghiêm trọng nếu board có LED tích hợp active-low; LED cảnh báo chất lượng không khí là PB12.</p>
+<h2 id="2-mo-va-build-keil">2. Mở và build Keil</h2>
+<ol>
+<li>Giải nén ZIP vào <code>C:\HTN\AirQuality_STM32F103C8T6</code> hoặc đường dẫn ngắn không dấu.</li>
+<li>Mở <code>keil\AirQuality.uvprojx</code> bằng Keil uVision 5.</li>
+<li>Nếu Keil yêu cầu gói chip, cài <strong>Keil STM32F1xx_DFP</strong> trong Pack Installer. Device là STM32F103C8; không chọn chip RAM/Flash lớn hơn.</li>
+<li>Bấm <strong>Options for Target</strong> (Alt+F7). Tab <strong>Target</strong>: chọn bản <strong>ARM Compiler 6</strong> đã cài, bật <strong>Use MicroLIB</strong>, nhập Xtal 8 MHz. Firmware thực tế dùng HSI nội 8 MHz; trường Xtal ở đây phục vụ cấu hình IDE.</li>
+<li>Tab <strong>C/C++ (AC6)</strong>: C99, include paths đã có trong project. Không chọn Compiler 5 cho bộ startup/port này.</li>
+<li>Tab <strong>Linker</strong>: dùng scatter file <code>air_quality.sct</code> trong thư mục keil, không tự sinh memory layout khác. Flash bắt đầu 0x08000000, kích thước 0x10000; RAM bắt đầu 0x20000000, kích thước 0x5000. 1 KB trên cùng dành cho main/interrupt stack; 256 byte ngay dưới dành cho heap MicroLIB, tách biệt với heap FreeRTOS 10 KB.</li>
+<li>Tab <strong>Output</strong>: bật Create HEX File. Bấm F7 để Build. Project gồm 17 file C; FreeRTOS đã có trong ZIP.</li>
+<li>Không thêm <code>startup_stm32f10x_md.s</code>, <code>system_stm32f10x.c</code>, thư viện HAL của CubeMX hoặc một bản FreeRTOS khác vào cùng target. Bộ này đã có startup, bảng vector và driver riêng.</li>
+</ol>
+<p>Nếu Keil báo compiler version chưa cài: vào Target chọn một bản ARM Compiler 6 đang có, hoặc cài Compiler 6 rồi chọn lại. Nếu báo thiếu device pack: cài STM32F1xx_DFP. Nếu báo trùng Reset_Handler/SysTick_Handler: kiểm tra có thêm startup/RTOS thứ hai hay không. Nếu lỗi linker do scatter file không tìm thấy, dùng Browse chọn lại <code>keil\air_quality.sct</code>.</p>
+<h2 id="3-nap-bang-st-link">3. Nạp bằng ST-Link</h2>
+<ol>
+<li>Options for Target → Debug → chọn ST-Link Debugger → Settings → Port <strong>SW</strong>, có thể bắt đầu với tốc độ 1 MHz.</li>
+<li>Utilities → chọn ST-Link để nạp Flash.</li>
+<li>Flash Download → Add → chọn thuật toán cho <strong>STM32F10x Medium Density / 64 KB Flash</strong>, địa chỉ 0x08000000. Tên hiển thị có thể khác theo phiên bản pack.</li>
+<li>Build F7 → Download F8 → Reset board. Nếu cần, bật Reset and Run.</li>
+<li>Debug để xem biến <code>g_diag</code>: các trường <code>adc_errors</code>, <code>sensor_dropped</code>, <code>uart_rx_dropped</code>, <code>uart_tx_errors</code>, <code>oled_errors</code>; <code>sensor_stack</code>, <code>analysis_stack</code>, <code>display_stack</code> là số <strong>word stack còn trống ít nhất</strong>, không phải byte; <code>free_heap</code> là số byte heap RTOS còn trống.</li>
+</ol>
+<p>ST-Link không nhất thiết tạo COM. Cổng COM dùng cho biểu đồ phải là USB-UART nối PA9/PA10. Khi dùng debugger, tránh dừng CPU trong lúc PC đang gửi lệnh liên tục.</p>
+<h2 id="4-chay-python-tren-windows">4. Chạy Python trên Windows</h2>
+<p>Cài Python có pip rồi mở terminal tại thư mục <code>pc</code>:</p>
+<pre><code class="language-powershell">python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe monitor.py --port COM5
+</code></pre>
+<p>Thay COM5 bằng cổng trong Device Manager → Ports (COM &amp; LPT). Nếu máy dùng lệnh <code>py</code>, có thể chạy <code>py -m venv .venv</code> ở bước đầu. Đóng PuTTY, Serial Monitor hoặc chương trình khác đang giữ COM trước khi chạy.</p>
+<p>Nếu chưa nối phần cứng, kiểm tra giao diện bằng:</p>
+<pre><code class="language-powershell">.\.venv\Scripts\python.exe monitor.py --demo
+</code></pre>
+<p>Demo chỉ tạo dữ liệu giả và tắt gửi lệnh; CSV ghi rõ DEMO. Không dùng dữ liệu đó làm kết quả đo của MQ-135.</p>
+<p>Giao diện hiển thị khoảng 60 giây gần nhất, ADC, mức hiện tại, ba đường ngưỡng và bốn vùng màu. Dữ liệu CSV được lưu tự động tại <code>pc/logs</code>, gồm thời gian, ADC, mức, ngưỡng và nguồn dữ liệu. Nếu chưa đồng bộ được ngưỡng, các cột ngưỡng trong CSV để trống; đường ngưỡng trên màn hình tạm dùng mặc định. Đóng cửa sổ để kết thúc và đóng file log.</p>
+<p>Trên Ubuntu có thể dùng <code>python3 monitor.py --port /dev/ttyUSB0</code> sau khi cài dependencies và cấp quyền truy cập serial phù hợp. Trên Windows không dùng tên <code>/dev/ttyUSB0</code>.</p>
+<h2 id="5-inh-dang-uart-va-oi-nguong">5. Định dạng UART và đổi ngưỡng</h2>
+<p>STM32 gửi dòng dữ liệu <strong><code>ADC,LEVEL</code></strong>, ví dụ <code>1820,2</code>. LEVEL là số 0, 1, 2 hoặc 3. Mỗi dòng kết thúc CRLF. Lệnh từ máy tính kết thúc LF; CRLF cũng được chấp nhận.</p>
+<table>
+<thead>
+<tr>
+<th>Gửi tới STM32</th>
+<th>Phản hồi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>THR,650,850,1100</code> theo ngưỡng thực tế</td>
+</tr>
+<tr>
+<td><code>SET T1 1100</code></td>
+<td><code>OK</code> nếu hợp lệ; ngưỡng được áp dụng</td>
+</tr>
+<tr>
+<td><code>SET T2 1900</code></td>
+<td><code>OK</code> nếu hợp lệ</td>
+</tr>
+<tr>
+<td><code>SET T3 2700</code></td>
+<td><code>OK</code> nếu hợp lệ</td>
+</tr>
+<tr>
+<td><code>SET T2 500</code></td>
+<td><code>ERR</code> nếu không thỏa T1 &lt; T2</td>
+</tr>
+</tbody>
+</table>
+<p>Trong ô Command của Python, nhập lệnh rồi Enter hoặc Send. Khi nhận OK, Python tự gửi GET để lấy ngưỡng thật từ MCU. Quy tắc là <strong>0 &lt; T1 &lt; T2 &lt; T3 ≤ 4095</strong>. Gửi mỗi lệnh rồi chờ phản hồi, không dán hàng trăm lệnh cùng lúc.</p>
+<p>Nếu muốn tăng cả ba ngưỡng vượt ngưỡng cũ, nên tăng T3 rồi T2 rồi T1; khi hạ cả ba thì hạ T1 rồi T2 rồi T3 để mỗi bước vẫn hợp lệ. Ngưỡng chỉ lưu trong RAM: reset hoặc mất nguồn sẽ về 650/850/1100. Đề cương không yêu cầu lưu Flash nên bộ này không ghi Flash.</p>
+<p>Phân mức khi bắt đầu hoặc vừa đổi ngưỡng: ADC&lt;T1 là Tốt; T1≤ADC&lt;T2 là Trung bình; T2≤ADC&lt;T3 là Kém; ADC≥T3 là Nguy hại. Khi đang chạy, mức tăng ngay tại ngưỡng và giảm khi ADC <strong>nhỏ hơn ngưỡng trừ 50</strong>. Ví dụ đang mức 3: 2550 vẫn giữ mức 3, 2549 xuống mức 2. Với ngưỡng rất nhỏ, hysteresis được giới hạn để ADC=0 vẫn có thể trở lại mức 0. Vì hysteresis, đôi lúc màu vùng theo ADC và mức hiện tại có thể khác nhau gần biên.</p>
+<h2 id="6-cau-truc-chuong-trinh">6. Cấu trúc chương trình</h2>
+<table>
+<thead>
+<tr>
+<th>Thành phần</th>
+<th>Hoạt động</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AirSensorTask</td>
+<td>Mỗi 100 ms đọc ADC1 kênh 0; trung bình trượt 10 mẫu; gửi queue 8 phần tử</td>
+</tr>
+<tr>
+<td>AnalysisTask</td>
+<td>Nhận mẫu, sở hữu ngưỡng, xử lý UART, hysteresis và PB12/PB13</td>
+</tr>
+<tr>
+<td>DisplayTask</td>
+<td>Nhận trạng thái mới nhất từ queue 1 phần tử, gửi UART và cập nhật OLED</td>
+</tr>
+<tr>
+<td>ISR USART1</td>
+<td>Chỉ lấy byte và dùng xQueueSendFromISR; không xử lý lệnh dài trong ISR</td>
+</tr>
+<tr>
+<td>app_ipc</td>
+<td>Tạo queue dùng chung và chứa thống kê chẩn đoán</td>
+</tr>
+<tr>
+<td>main</td>
+<td>Khởi tạo BSP/HAL/IPC, tạo 3 task, chạy scheduler</td>
+</tr>
+</tbody>
+</table>
+<p>Ưu tiên Sensor=3, Analysis=2, Display=1; stack lần lượt 192/384/384 word. Idle task của FreeRTOS là task hệ thống. Heap RTOS 10 KB dùng heap_4. ADC, I2C và UART TX có mutex; các lần đợi cờ ngoại vi đều có giới hạn. GPIO cảnh báo chỉ AnalysisTask ghi. Cấu hình này tránh OLED chậm làm chặn chu kỳ lấy mẫu; nếu queue sensor đầy, tăng bộ đếm lỗi thay vì đợi vô hạn.</p>
+<p>Không có HAL_Delay hoặc delay_ms trong task. Đợi định kỳ dùng vTaskDelay/vTaskDelayUntil; các vòng chờ cờ ngoại vi có giới hạn trong driver. UART lỗi/tràn thì bỏ lệnh chưa hoàn chỉnh. Nếu OLED không nối, UART vẫn chạy và OLED được thử khởi tạo lại mỗi khoảng 2 giây. Nếu I2C bị giữ thấp do phần cứng, cần sửa dây/nguồn rồi reset; driver không thực hiện phát xung khôi phục bus.</p>
+<h2 id="7-kiem-tra-tren-kit-truoc-khi-nop">7. Kiểm tra trên kit trước khi nộp</h2>
+<ol>
+<li>Build Keil và ghi lại số error/warning, Code/RO-data/RW-data/ZI-data trong log.</li>
+<li>Kiểm tra điện áp PA0 nằm trong 0–3,3 V. Có thể dùng biến trở 10 kΩ nối giữa 3,3 V và GND, chân giữa vào PA0 để kiểm tra ADC trước khi gắn MQ-135.</li>
+<li>Chạy Python, kiểm tra GET nhận đúng ba ngưỡng và ADC thay đổi theo biến trở. Do lọc 10 mẫu, đáp ứng đầy đủ mất khoảng 1 giây.</li>
+<li>Qua từng ngưỡng, đối chiếu OLED, Python và LED/buzzer; thử giảm qua T3−50 để kiểm tra hysteresis.</li>
+<li>Thử lệnh đúng, lệnh sai, ngưỡng ngoài miền; ERR phải giữ nguyên ngưỡng cũ.</li>
+<li>Ngắt OLED khi đã tắt nguồn, bật lại rồi kiểm tra UART/ADC vẫn hoạt động. Nối lại đúng dây và reset để thử OLED.</li>
+<li>Quan sát <code>g_diag</code> sau khi chạy lâu và đổi ngưỡng nhiều lần: stack còn dư, heap còn dư, không tràn queue trong vận hành bình thường. Chụp ảnh kết quả thật và lưu CSV.</li>
+<li>Lắp MQ-135, làm nóng theo datasheet của đúng module, đợi nền ổn định rồi hiệu chuẩn lại. Không báo giá trị ADC như chỉ số an toàn sức khỏe hoặc AQI chuẩn.</li>
+</ol>
+<h2 id="8-ua-code-len-git-theo-quy-trinh-nhom">8. Đưa code lên Git theo quy trình nhóm</h2>
+<h3 id="81-chuan-bi">8.1 Chuẩn bị</h3>
+<p>Bạn chưa cung cấp URL repo, nên những lệnh sau dùng <code>&lt;URL_REPO&gt;</code> và <code>&lt;THU_MUC_REPO&gt;</code> để bạn thay bằng giá trị thật. Dùng Git Bash ở Windows. Các lệnh này không tự động được chạy trên tài khoản của bạn.</p>
+<p>Nếu nhóm chưa có repo: trưởng nhóm tạo repo với README và <code>.gitignore</code>, khung thư mục, sau đó tạo <code>develop</code> từ <code>main</code>. Đây là bước khởi tạo; các thay đổi chức năng về sau đi qua PR, không commit trực tiếp vào main.</p>
+<pre><code class="language-bash">git clone &lt;URL_REPO&gt;
+cd &lt;THU_MUC_REPO&gt;
+git fetch origin
+git switch develop
+git pull --ff-only origin develop
+</code></pre>
+<p>Nếu develop chưa tồn tại, trưởng nhóm tạo một lần:</p>
+<pre><code class="language-bash">git switch main
+git pull --ff-only origin main
+git switch -c develop
+git push -u origin develop
+</code></pre>
+<p>Để thư mục ZIP đã giải nén <strong>bên ngoài repo clone</strong>, rồi chép đúng các file của từng giai đoạn vào repo. Không chép thư mục <code>.git</code>, không chép toàn bộ ZIP hoặc file build lên repo. Nếu repo đã có code khác, so sánh và ghép từng thay đổi thay vì ghi đè. Khung/API do nhóm đang dùng là điểm cần thống nhất trước khi thay thế.</p>
+<h3 id="82-nhanh-nen-tang-va-hal">8.2 Nhánh nền tảng và HAL</h3>
+<p>Nhánh này dành cho việc chuẩn bị bộ nền tảng mới; nếu leader đã chuẩn bị HAL/FreeRTOS, dùng khung của leader và chỉ chuyển phần cần thiết.</p>
+<pre><code class="language-bash">git switch develop
+git pull --ff-only origin develop
+git switch -c feature/platform-hal
+</code></pre>
+<p>Chép <code>bsp</code>, <code>hal</code>, <code>middlewares</code>, <code>.gitignore</code>; chép <code>app_cfg.h</code>, <code>FreeRTOSConfig.h</code>, <code>air_logic.h</code>, <code>app_ipc.h</code> vào <code>app/inc</code>; chép <code>air_logic.c</code>, <code>app_ipc.c</code> vào <code>app/src</code>.</p>
+<pre><code class="language-bash">git add bsp hal middlewares .gitignore
+git add app/inc/app_cfg.h app/inc/FreeRTOSConfig.h app/inc/air_logic.h app/inc/app_ipc.h
+git add app/src/air_logic.c app/src/app_ipc.c
+git diff --cached --stat
+git commit -m &quot;feat(hal): add STM32F103 drivers and shared FreeRTOS interfaces&quot;
+git push -u origin feature/platform-hal
+</code></pre>
+<p>Mở PR với <strong>base: develop</strong>, <strong>compare: feature/platform-hal</strong>. Ghi rõ đây là nền tảng, chưa chứa main ghép toàn bộ. Test driver độc lập cần harness của nhóm hoặc thử bản tích hợp trong thư mục riêng; không tuyên bố nhánh trung gian là firmware hoàn chỉnh. Nhờ thành viên khác review/leader merge rồi mới tiếp tục.</p>
+<h3 id="83-ba-nhanh-task">8.3 Ba nhánh task</h3>
+<p>Sau khi nhánh trước được merge, luôn cập nhật develop rồi tạo nhánh tiếp theo. Với sensor:</p>
+<pre><code class="language-bash">git switch develop
+git pull --ff-only origin develop
+git switch -c feature/task-sensor
+</code></pre>
+<p>Chép <code>app/inc/task_sensor.h</code> và <code>app/src/task_sensor.c</code>:</p>
+<pre><code class="language-bash">git add app/inc/task_sensor.h app/src/task_sensor.c
+git commit -m &quot;feat(task-sensor): sample ADC and filter air readings&quot;
+git push -u origin feature/task-sensor
+</code></pre>
+<p>Mở PR <code>feature/task-sensor</code> → <code>develop</code>. Chờ merge. Lặp lại cùng quy trình với:</p>
+<table>
+<thead>
+<tr>
+<th>Nhánh</th>
+<th>File cần chép và git add</th>
+<th>Commit message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>feature/task-analysis</td>
+<td>app/inc/task_analysis.h, app/src/task_analysis.c</td>
+<td>feat(task-analysis): classify readings and handle threshold commands</td>
+</tr>
+<tr>
+<td>feature/task-display</td>
+<td>app/inc/task_display.h, app/src/task_display.c</td>
+<td>feat(task-display): update OLED and publish UART readings</td>
+</tr>
+</tbody>
+</table>
+<p>Các nhánh task <strong>không thay đổi main.c</strong>. Muốn test riêng từng task, dùng project/harness cục bộ với mock queue, không đưa main test đó vào PR task. Bộ ZIP chứa main tích hợp hoàn chỉnh phục vụ bước sau.</p>
+<h3 id="84-python-tai-lieu-va-kiem-thu">8.4 Python, tài liệu và kiểm thử</h3>
+<p>Từ develop mới nhất, tạo <code>feature/pc-monitor</code>, chép <code>pc</code>, <code>docs</code>, <code>tests</code>, <code>README.md</code>, <code>HUONG_DAN.html</code>. Không chép <code>pc/logs</code>, <code>.venv</code>, <code>build</code>.</p>
+<pre><code class="language-bash">git switch develop
+git pull --ff-only origin develop
+git switch -c feature/pc-monitor
+git add pc docs tests README.md HUONG_DAN.html
+git diff --cached --stat
+git commit -m &quot;feat(pc-monitor): add UART plotting commands and project guide&quot;
+git push -u origin feature/pc-monitor
+</code></pre>
+<p>Mở PR vào develop rồi chờ review/merge. Script build ở tests sẽ cần main và project tích hợp để build toàn bộ; test logic và parser có thể chạy độc lập.</p>
+<h3 id="85-tich-hop-tai-mainc-va-project-keil">8.5 Tích hợp tại main.c và project Keil</h3>
+<p>Sau khi tất cả các PR trên đã merge:</p>
+<pre><code class="language-bash">git switch develop
+git pull --ff-only origin develop
+git switch -c integration/system-v1
+</code></pre>
+<p>Lúc này chép <code>main.c</code> và thư mục <code>keil</code> từ gói giải nén. Người phụ trách tích hợp kiểm tra lại <code>app_ipc.c</code>, cấu hình bộ nhớ, chân và clock. Build Keil, nạp kit và thực hiện checklist.</p>
+<pre><code class="language-bash">git add main.c keil
+git diff --cached --stat
+git commit -m &quot;feat(integration): wire tasks and add Keil STM32F103 target&quot;
+git push -u origin integration/system-v1
+</code></pre>
+<p>Mở PR <code>integration/system-v1</code> → <code>develop</code>, đính kèm kết quả kiểm thử thật. Không đánh dấu ổn định khi chỉ build qua. Chỉ người phụ trách cấu hình thay đổi clock, chân và FreeRTOSConfig; không tự generate CubeMX đè bộ này.</p>
+<h3 id="86-ong-bo-khi-develop-thay-oi">8.6 Đồng bộ khi develop thay đổi</h3>
+<p>Chỉ làm khi working tree sạch, trên nhánh feature của chính mình:</p>
+<pre><code class="language-bash">git status
+git fetch origin
+git rebase origin/develop
+</code></pre>
+<p>Nếu conflict: mở từng file, chọn/ghép phần đúng, xóa các dấu conflict, rồi:</p>
+<pre><code class="language-bash">git add &lt;FILE_DA_SUA&gt;
+git rebase --continue
+</code></pre>
+<p>Nếu chưa biết xử lý thì <code>git rebase --abort</code> để trở lại trước rebase, rồi trao đổi với người viết phần liên quan. Sau khi rebase thành công nhánh đã push của <strong>chính mình</strong>:</p>
+<pre><code class="language-bash">git push --force-with-lease origin &lt;TEN_NHANH_CUA_BAN&gt;
+</code></pre>
+<p>Không force push main/develop hoặc nhánh đang có nhiều người cùng làm. Nếu nhánh chưa từng push, dùng <code>git push -u origin &lt;TEN_NHANH_CUA_BAN&gt;</code>.</p>
+<h3 id="87-release-do-truong-nhom-thuc-hien">8.7 Release do trưởng nhóm thực hiện</h3>
+<p>Sau khi integration đã được duyệt, merge về develop; sau khi chạy ổn định trên kit, đưa develop vào main theo quyền/protection của repo và gắn tag v1.0.0. Nếu nhánh main được bảo vệ, tạo PR develop → main; không vượt qua branch protection. Đối với repo cho phép leader merge bằng CLI, sau khi review và kiểm tra remote:</p>
+<pre><code class="language-bash">git switch main
+git pull --ff-only origin main
+git fetch origin
+git merge --no-ff origin/develop
+git tag -a v1.0.0 -m &quot;Release v1.0.0: verified air quality system&quot;
+git push origin main
+git push origin v1.0.0
+</code></pre>
+<p>Chỉ tạo tag khi không có tag cùng tên và đã có kết quả phần cứng. Mỗi PR nên ghi: chức năng, file đổi, kiểm thử đã làm, kết quả, lỗi còn lại. Không ghi đã kiểm thử những mục chưa thực hiện.</p>
+<h2 id="9-file-nao-uoc-up">9. File nào được up</h2>
+<p>Giữ <code>.c</code>, <code>.h</code>, <code>.uvprojx</code>, <code>.sct</code>, mã nguồn FreeRTOS và license, Python, requirements, tests và tài liệu. <code>.uvprojx</code> là project dùng chung nên <strong>cần commit</strong>. Không commit Objects, Listings, Debug, Release, build, <code>.axf</code>, <code>.hex</code>, <code>.elf</code>, <code>.o</code>, <code>.uvguix.*</code>, <code>.uvoptx</code>, <code>.venv</code> hoặc log đo tự sinh. Trước commit dùng <code>git status</code> và <code>git diff --cached --stat</code> để kiểm tra.</p>
+<h2 id="10-nguon-ky-thuat">10. Nguồn kỹ thuật</h2>
+<ul>
+<li>Đề cương HTN03-N10 và quy trình QuyTrinh-Git-2 do nhóm cung cấp.</li>
+<li><a href="https://www.st.com/resource/en/datasheet/stm32f103c8.pdf">STM32F103C8 datasheet</a>: bộ nhớ, chân và đặc tính điện.</li>
+<li><a href="https://www.st.com/resource/en/reference_manual/rm0008-stm32f101xx-stm32f102xx-stm32f103xx-advanced-arm-based-32-bit-mcus-stmicroelectronics.pdf">STM32F1 RM0008 reference manual</a>: thanh ghi RCC, GPIO, ADC, USART, I2C.</li>
+<li><a href="https://github.com/FreeRTOS/FreeRTOS-Kernel/tree/V11.1.0">FreeRTOS Kernel V11.1.0</a>: kernel, Cortex-M3 port và heap_4; bản quyền MIT giữ trong middlewares/FreeRTOS/LICENSE.md.</li>
+</ul></main></html>
